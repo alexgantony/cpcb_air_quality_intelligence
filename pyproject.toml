@@ -1,12 +1,13 @@
 [project]
 name = "cpcb-air-quality-intelligence"
 version = "0.1.0"
-description = "Add your description here"
+description = "Interactive Power BI dashboard using CPCB Government of India air-quality data, with Python/Pandas for data cleaning and analysis across states, cities, stations, AQI, and pollutants."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.5.3",
     "pandas>=3.0.6",
+    "pyarrow>=25.0.1",
 ]
 
 [dependency-groups]
