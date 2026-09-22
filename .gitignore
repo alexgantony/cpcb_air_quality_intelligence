@@ -8,3 +8,19 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Secrets (API keys)
+.env
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+desktop.ini
