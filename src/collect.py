@@ -23,8 +23,8 @@ MIN_PAGE_SIZE = 100  # smallest page size to fall back to
 MAX_ATTEMPTS = 3  # tries per page
 MAX_PASSES = 3  # full passes allowed to fill in records that paging missed
 RETRY_WAIT = 20  # seconds between tries
-EMPTY_WAIT = 300  # seconds to wait when the dataset is empty (being refreshed)
-EMPTY_ATTEMPTS = 4  # how many times to wait for it: up to ~20 minutes
+EMPTY_WAIT = 180  # seconds to wait when the dataset is empty (being refreshed)
+EMPTY_ATTEMPTS = 2  # one wait of 3 min: the next scheduled run picks it up otherwise
 TIMEOUT = (10, 120)  # (connect, read) seconds
 
 # Optional extra query parameters asking the API for a fixed sort order,
@@ -51,6 +51,9 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "data" / "raw" / "api"
+
+API_TIME_FORMAT = "%d-%m-%Y %H:%M:%S"  # how last_update arrives, e.g. 24-09-2026 17:00:00
+FILE_TIME_FORMAT = "%Y-%m-%d_%H%M"  # how snapshot files are named, e.g. 2026-09-24_1700
 
 
 # --- Functions ----------------------------------------------------------------
@@ -175,14 +178,48 @@ def fetch_all() -> pd.DataFrame:
     return df
 
 
+def snapshot_path(last_update: str) -> Path:
+    """Path a snapshot taken at this reading time is saved to.
+
+    Files are named after the reading's own hour (last_update), not the time we
+    fetched it, so the same hour always maps to the same file and collecting it
+    twice is impossible.
+    """
+    reading_time = datetime.strptime(last_update, API_TIME_FORMAT)
+    return OUT_DIR / f"{reading_time:{FILE_TIME_FORMAT}}.csv.gz"
+
+
+def peek_reading_time() -> str | None:
+    """Ask for a single record to learn which hour the API is currently serving.
+
+    Lets a run skip the full download when that hour is already saved. Returns
+    None if the cheap check fails for any reason, in which case the caller just
+    does the full fetch.
+    """
+    try:
+        return fetch_page(0, 1)["records"][0]["last_update"]
+    except (EmptyDatasetError, RuntimeError, LookupError):
+        return None
+
+
 def main() -> None:
     fetched_at = datetime.now(IST)
     print(f"Fetching CPCB data at {fetched_at:%Y-%m-%d %H:%M} IST")
 
+    # Cheap check first: one record tells us the hour on offer.
+    last_update = peek_reading_time()
+    if last_update is not None and snapshot_path(last_update).exists():
+        print(f"  {last_update} already collected, skipping")
+        return
+
     df = fetch_all()
 
+    out_path = snapshot_path(df["last_update"].mode()[0])
+    if out_path.exists():  # peek failed earlier, or the hour changed mid-run
+        print(f"  {out_path.name} already collected, skipping")
+        return
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / f"{fetched_at:%Y-%m-%d_%H%M}.csv.gz"
     df.to_csv(out_path, index=False)  # .gz extension -> compressed automatically
 
     print(f"Saved {len(df)} rows to {out_path.relative_to(ROOT)}")
