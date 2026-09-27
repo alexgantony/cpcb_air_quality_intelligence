@@ -1,8 +1,8 @@
 name: Collect Real time Air Quality Index
 
 on:
-  schedule:
-    - cron: '*/15 * * * *' # every 15 minutes
+  #   schedule:
+  #     - cron: '*/15 * * * *' # every 15 minutes
 
   # Manually trigger the workflow from the GitHub actions tab
   workflow_dispatch:
